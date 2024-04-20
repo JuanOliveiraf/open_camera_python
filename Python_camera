@@ -1,0 +1,40 @@
+import cv2
+import mediapipe as mp
+
+def capturar_foto(nome_arquivo='foto.jpg', frame=None):
+    if frame is not None:
+        cv2.imwrite(nome_arquivo, frame)
+        print(f"Foto salva como: {nome_arquivo}")
+    else:
+        print("Erro. Não foi possível capturar a foto.")
+
+capture = cv2.VideoCapture(0)
+if not capture.isOpened():
+    print("Não foi possível abrir a câmera.")
+
+webcam = cv2.VideoCapture(0)
+
+reconhecimento_rosto = mp.solutions.face_detection
+desenho = mp.solutions.drawing_utils
+reconhecedor_rosto = reconhecimento_rosto.FaceDetection()
+
+while webcam.isOpened():
+    validacao, frame = webcam.read()
+    if not validacao:
+        break
+    imagem = frame
+    lista_rostos = reconhecedor_rosto.process(imagem)
+
+    if lista_rostos.detections:
+        for rosto in lista_rostos.detections:
+            desenho.draw_detection(imagem, rosto)
+
+    cv2.imshow("Rostos na sua webcam", imagem)
+    key = cv2.waitKey(5)
+    if key == 27:  # ESC
+        break
+    elif key == ord('c'):  # Pressione 'c' para capturar a foto
+        capturar_foto('foto_capturada.jpg', frame)
+
+webcam.release()
+cv2.destroyAllWindows()
