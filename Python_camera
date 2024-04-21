@@ -27,9 +27,11 @@ while webcam.isOpened():
 
     if lista_rostos.detections:
         for rosto in lista_rostos.detections:
+            # ih: representa a altura da imagem (número de linhas de pixels).
+            # iw: representa a largura da imagem (número de colunas de pixels).
+            # ic: representa o número de canais de cores da imagem
             ih, iw, ic = imagem.shape
             x_nariz, y_nariz = int(iw * rosto.location_data.relative_keypoints[2].x), int(ih * rosto.location_data.relative_keypoints[2].y)
-
             # Desenhando um ponto no canto da tela
             cv2.circle(imagem, (30, 30), 5, (0, 255, 0), -1)
 
