@@ -27,6 +27,16 @@ while webcam.isOpened():
 
     if lista_rostos.detections:
         for rosto in lista_rostos.detections:
+            ih, iw, ic = imagem.shape
+            x_nariz, y_nariz = int(iw * rosto.location_data.relative_keypoints[2].x), int(ih * rosto.location_data.relative_keypoints[2].y)
+
+            # Desenhando um ponto no canto da tela
+            cv2.circle(imagem, (30, 30), 5, (0, 255, 0), -1)
+
+            # Desenhando uma linha conectando o ponto do canto ao nariz
+            cv2.line(imagem, (30, 30), (x_nariz, y_nariz), (0, 255, 0), 2)
+
+            # Desenhando o retângulo ao redor do rosto
             desenho.draw_detection(imagem, rosto)
 
     cv2.imshow("Rostos na sua webcam", imagem)
