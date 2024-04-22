@@ -1,52 +1,98 @@
 import cv2
 import mediapipe as mp
+import time
 
-def capturar_foto(nome_arquivo='foto.jpg', frame=None):
-    if frame is not None:
-        cv2.imwrite(nome_arquivo, frame)
-        print(f"Foto salva como: {nome_arquivo}")
-    else:
-        print("Erro. Não foi possível capturar a foto.")
 
-capture = cv2.VideoCapture(0)
-if not capture.isOpened():
-    print("Não foi possível abrir a câmera.")
+class DetectorDePoseFacial:
+    def __init__(self):
+        self.webcam = cv2.VideoCapture(0)
+        if not self.webcam.isOpened():
+            raise Exception("Falha ao abrir a webcam.")
 
-webcam = cv2.VideoCapture(0)
+        self.detector_rosto = mp.solutions.face_detection.FaceDetection()
+        self.utilidades_desenho = mp.solutions.drawing_utils
+        self.direcoes = ['centro', 'cima', 'baixo', 'esquerda', 'direita']
+        self.direcao_atual = 0
+        self.tempo_inicial = None
+        self.posicao_mantida = False
 
-reconhecimento_rosto = mp.solutions.face_detection
-desenho = mp.solutions.drawing_utils
-reconhecedor_rosto = reconhecimento_rosto.FaceDetection()
+    def salvar_foto(self, nome_arquivo='foto.jpg', frame=None):
+        """Salva o frame capturado como uma foto."""
+        if frame is not None:
+            cv2.imwrite(nome_arquivo, frame)
+            print(f"Foto salva como: {nome_arquivo}")
+        else:
+            print("Erro: Não foi possível capturar a foto.")
 
-while webcam.isOpened():
-    validacao, frame = webcam.read()
-    if not validacao:
-        break
-    imagem = frame
-    lista_rostos = reconhecedor_rosto.process(imagem)
+    def verificar_direcao(self, x_nariz, y_nariz, largura_img, altura_img, direcao):
+        """Verifica se o nariz está na direção especificada em relação ao centro da imagem."""
+        centro_x, centro_y = largura_img // 2, altura_img // 2
+        margem = 0.1 * altura_img  # Margem de 10% da altura da imagem
 
-    if lista_rostos.detections:
-        for rosto in lista_rostos.detections:
-            # ih: representa a altura da imagem (número de linhas de pixels).
-            # iw: representa a largura da imagem (número de colunas de pixels).
-            # ic: representa o número de canais de cores da imagem
-            ih, iw, ic = imagem.shape
-            x_nariz, y_nariz = int(iw * rosto.location_data.relative_keypoints[2].x), int(ih * rosto.location_data.relative_keypoints[2].y)
-            # Desenhando um ponto no canto da tela
-            cv2.circle(imagem, (30, 30), 5, (0, 255, 0), -1)
+        if direcao == 'centro':
+            return abs(x_nariz - centro_x) < margem and abs(y_nariz - centro_y) < margem
+        elif direcao == 'cima':
+            return y_nariz < centro_y - margem
+        elif direcao == 'baixo':
+            return y_nariz > centro_y + margem
+        elif direcao == 'esquerda':
+            return x_nariz < centro_x - margem
+        elif direcao == 'direita':
+            return x_nariz > centro_x + margem
+        return False
 
-            # Desenhando uma linha conectando o ponto do canto ao nariz
-            cv2.line(imagem, (30, 30), (x_nariz, y_nariz), (0, 255, 0), 2)
+    def executar(self):
+        """Método principal para processar a entrada da webcam e detectar a pose facial."""
+        while self.webcam.isOpened():
+            ret, frame = self.webcam.read()
+            if not ret:
+                break
 
-            # Desenhando o retângulo ao redor do rosto
-            desenho.draw_detection(imagem, rosto)
+            imagem = frame
+            resultados_rosto = self.detector_rosto.process(imagem)
 
-    cv2.imshow("Rostos na sua webcam", imagem)
-    key = cv2.waitKey(5)
-    if key == 27:  # ESC
-        break
-    elif key == ord('c'):  # Pressione 'c' para capturar a foto
-        capturar_foto('foto_capturada.jpg', frame)
+            if resultados_rosto.detections:
+                for rosto in resultados_rosto.detections:
+                    altura_img, largura_img, _ = imagem.shape
+                    x_nariz = int(largura_img * rosto.location_data.relative_keypoints[2].x)
+                    y_nariz = int(altura_img * rosto.location_data.relative_keypoints[2].y)
 
-webcam.release()
-cv2.destroyAllWindows()
+                    self.utilidades_desenho.draw_detection(imagem, rosto)
+                    cv2.circle(imagem, (x_nariz, y_nariz), 5, (0, 0, 255), -1)
+
+                    cv2.putText(imagem, f"Olhe para {self.direcoes[self.direcao_atual]}", (50, 50),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+                    if self.verificar_direcao(x_nariz, y_nariz, largura_img, altura_img,
+                                              self.direcoes[self.direcao_atual]):
+                        if self.tempo_inicial is None:
+                            self.tempo_inicial = time.time()  # Inicia o timer
+                            self.posicao_mantida = True
+                        if time.time() - self.tempo_inicial >= 3:
+                            self.salvar_foto(f'foto_{self.direcoes[self.direcao_atual]}.jpg', frame)
+                            self.direcao_atual = (self.direcao_atual + 1) % len(self.direcoes)
+                            self.tempo_inicial = None  # Reseta o timer para a próxima direção
+                            if self.direcao_atual == 0:
+                                print("Todas as direções foram capturadas. Finalizando o programa.")
+                                self.webcam.release()
+                                cv2.destroyAllWindows()
+                                return
+                        if self.posicao_mantida:
+                            cv2.putText(imagem, "Mantenha a posicao.", (50, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.7,
+                                        (0, 255, 0), 2)
+                    else:
+                        self.tempo_inicial = None  # Reseta o timer se a posição não for correta
+                        self.posicao_mantida = False
+
+            cv2.imshow("Rostos na sua webcam", imagem)
+            tecla = cv2.waitKey(5)
+            if tecla == 27:  # ESC para sair
+                break
+
+        self.webcam.release()
+        cv2.destroyAllWindows()
+
+
+# Exemplo de uso
+if __name__ == "__main__":
+    detector = DetectorDePoseFacial()
+    detector.executar()
